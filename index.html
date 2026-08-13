@@ -2316,7 +2316,7 @@ function rejectVaga(id){ saveStageOverride(id,'Negada'); renderVagas(); }
 
 // status pode ser sobrescrito pelo usuário (drag-drop), persistido em localStorage
 function loadStageOverrides(){ try{ return JSON.parse(localStorage.getItem('vaga_stage_overrides')||'{}'); }catch(e){ return {}; } }
-function saveStageOverride(id, stage){ const o=loadStageOverrides(); o[id]=stage; localStorage.setItem('vaga_stage_overrides', JSON.stringify(o)); }
+function saveStageOverride(id, stage){ const o=loadStageOverrides(); o[id]=stage; localStorage.setItem('vaga_stage_overrides', JSON.stringify(o)); if(window.saveSync)window.saveSync(); }
 function stageOf(v){ const o=loadStageOverrides(); return o[v.id] || v.status; }
 function fitClass(f){ return f>=85?'hi':f>=70?'mid':'lo'; }
 
@@ -2527,7 +2527,7 @@ appInit();
   function hide(){ov.style.display='none';lo.style.display='block';}
   var t=null;
   // Chaves sincronizadas: [nome no banco, chave no localStorage]
-  var KEYS=[['pj_done','pj_done_v1'],['bjj_diario','bjj_diario_v1'],['diary_entries','diary_entries'],['roda_entries','roda_entries'],['treino_sessions','treino_sessions'],['vaga_notes','vaga_notes']];
+  var KEYS=[['pj_done','pj_done_v1'],['bjj_diario','bjj_diario_v1'],['vaga_stage_overrides','vaga_stage_overrides'],['diary_entries','diary_entries'],['roda_entries','roda_entries'],['treino_sessions','treino_sessions'],['vaga_notes','vaga_notes']];
   window.saveSync=function(){clearTimeout(t);t=setTimeout(async function(){
     var u=(await SB.auth.getUser()).data.user; if(!u)return;
     for(var i=0;i<KEYS.length;i++){var raw=localStorage.getItem(KEYS[i][1]); if(raw==null)continue;
@@ -2543,9 +2543,28 @@ appInit();
     if(lbl)lbl.textContent='nuvem'; if(dot)dot.classList.add('on');
     // Autosave periódico (a cada 5 min) — rede de segurança além do save por interação
     if(!window._autosave){ window._autosave=setInterval(function(){ if(window.saveSync)window.saveSync(); }, 300000); }
+    // Pull automático (a cada 20s) — traz mudanças feitas em outro aparelho
+    if(!window._pull){ window._pull=setInterval(pullSync, 20000); }
     if(window.PJ)window.PJ.render(); if(window.mxRender)window.mxRender(); if(window.bjjRender)window.bjjRender();
     if(typeof initRoda==='function'){try{initRoda();initTreinos();initDiario();renderVagas();}catch(e){}}
     if(window.PJ&&!window.PJ._sync){var _s=window.PJ.setDone;window.PJ.setDone=function(k,val){_s(k,val);window.saveSync();};window.PJ._sync=true;}
+  }
+  // Busca o estado mais recente do banco e re-renderiza se algo mudou em outro aparelho.
+  // Pula o ciclo se o usuário está digitando (foco em input/textarea/select) pra não atrapalhar.
+  async function pullSync(){
+    if(!SB) return;
+    var u=(await SB.auth.getUser()).data.user; if(!u)return;
+    var ae=document.activeElement, tag=ae?ae.tagName:'';
+    if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT') return;
+    var changed=false;
+    for(var i=0;i<KEYS.length;i++){try{
+      var r=await SB.from('store').select('v').eq('user_id',u.id).eq('k',KEYS[i][0]).maybeSingle();
+      if(r.data&&r.data.v!=null){ var nv=JSON.stringify(r.data.v); if(localStorage.getItem(KEYS[i][1])!==nv){ localStorage.setItem(KEYS[i][1],nv); changed=true; } }
+    }catch(e){}}
+    if(changed){
+      if(window.PJ)window.PJ.render(); if(window.mxRender)window.mxRender(); if(window.bjjRender)window.bjjRender();
+      if(typeof renderVagas==='function'){try{renderVagas();}catch(e){}}
+    }
   }
   document.getElementById('authBtn').addEventListener('click',async function(){
     msg.style.color='#8fa3c8';msg.textContent='Entrando...';
