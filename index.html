@@ -207,6 +207,11 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 .kanban-col-head .kc-dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
 .kanban-col-head .kc-title{font-size:.78rem;font-weight:600;color:var(--cream);letter-spacing:.01em}
 .kanban-col-head .kc-count{margin-left:auto;font-family:var(--mono);font-size:.7rem;color:var(--muted);background:rgba(255,255,255,.05);padding:.1rem .5rem;border-radius:1rem}
+/* Cabeçalho em chevron (visão de funil) */
+.kanban-col-head.chev{border-bottom:none;margin:.45rem .45rem .2rem;border-radius:3px;padding:.5rem .65rem .5rem 1.25rem;color:#08131f;position:relative;top:0;box-shadow:0 2px 8px rgba(0,0,0,.35);clip-path:polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 14px 50%)}
+.kanban-col-head.chev .kc-title{color:#08131f;font-weight:800;font-size:.74rem;text-shadow:0 1px 0 rgba(255,255,255,.3)}
+.kanban-col-head.chev .kc-count{margin-left:auto;font-family:var(--mono);font-size:.68rem;color:#fff;background:rgba(0,0,0,.32);padding:.1rem .5rem;border-radius:1rem}
+.kanban-col{overflow:visible}
 .kanban-body{padding:.7rem;display:flex;flex-direction:column;gap:.65rem;overflow-y:auto;flex:1}
 .kanban-empty{font-size:.72rem;color:var(--muted);text-align:center;padding:1.2rem .5rem;border:1px dashed var(--border);border-radius:10px}
 .kan-card{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:.85rem .9rem;display:flex;flex-direction:column;gap:.5rem;cursor:grab;transition:border-color .2s,transform .12s,box-shadow .2s}
@@ -2292,12 +2297,12 @@ function renderDiaryRecent() {
 // ══════════════════════════════════════════════════════
 // Funil (colunas do kanban). Cada estágio mapeia status -> coluna.
 const STAGES = [
-  {key:'Fase avançada',      label:'⭐ Fase avançada',      color:'#4ade80'},
-  {key:'Em triagem',         label:'🗣️ Em triagem',         color:'#a78bfa'},
-  {key:'Candidatura enviada',label:'✈️ Enviada — aguardando',color:'#60a5fa'},
-  {key:'Aguardando',         label:'⏳ Aguardando retorno',  color:'#94a3b8'},
-  {key:'Abordagem',          label:'📨 Abordagem',           color:'#fbbf24'},
   {key:'Pendente',           label:'⚠️ Pendente / a aplicar',color:'#f87171'},
+  {key:'Abordagem',          label:'📨 Abordagem',           color:'#fbbf24'},
+  {key:'Candidatura enviada',label:'✈️ Enviada — aguardando',color:'#60a5fa'},
+  {key:'Aguardando',         label:'⏳ Aguardando retorno',  color:'#38bdf8'},
+  {key:'Em triagem',         label:'🗣️ Em triagem',         color:'#a78bfa'},
+  {key:'Fase avançada',      label:'⭐ Fase avançada',      color:'#4ade80'},
   {key:'Oferta',             label:'✅ Oferta',              color:'#22c55e'},
   {key:'Descartada',         label:'❌ Sem retorno',         color:'#6b7280'},
   {key:'Negada',             label:'🚫 Negada / Cancelada',  color:'#ef4444'},
@@ -2350,7 +2355,7 @@ function renderKanban(match){
     const items = VAGAS.filter(v => stageOf(v)===s.key && match(v)).sort((a,b)=>b.fit-a.fit);
     const total = VAGAS.filter(v => stageOf(v)===s.key).length;
     return `<div class="kanban-col" data-stage="${s.key}">
-      <div class="kanban-col-head"><span class="kc-dot" style="background:${s.color}"></span><span class="kc-title">${s.label}</span><span class="kc-count">${total}</span></div>
+      <div class="kanban-col-head chev" style="background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(0,0,0,.08)), ${s.color}"><span class="kc-title">${s.label}</span><span class="kc-count">${total}</span></div>
       <div class="kanban-body">${items.length?items.map(cardHTML).join(''):'<div class="kanban-empty">vazio</div>'}</div>
     </div>`;
   }).join('');
