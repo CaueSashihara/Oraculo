@@ -169,6 +169,10 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 .diary-item-preview{font-size:.8rem;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 
 /* ── VAGAS ───────────────────────────────────────────── */
+/* feedback do swipe: direita avança, esquerda nega */
+.kan-card.sw-right,.vaga-card.sw-right{border-color:#22c55e!important;box-shadow:8px 0 0 -3px #22c55e inset,0 0 16px rgba(34,197,94,.35)}
+.kan-card.sw-left,.vaga-card.sw-left{border-color:#ef4444!important;box-shadow:-8px 0 0 -3px #ef4444 inset,0 0 16px rgba(239,68,68,.35)}
+.kan-card,.vaga-card{user-select:none}
 .vagas-filters{display:flex;gap:.5rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center}
 .filter-btn{
   font-size:.72rem;padding:.35rem .9rem;border-radius:2rem;border:1px solid var(--border);
@@ -2296,8 +2300,14 @@ const STAGES = [
   {key:'Pendente',           label:'⚠️ Pendente / a aplicar',color:'#f87171'},
   {key:'Oferta',             label:'✅ Oferta',              color:'#22c55e'},
   {key:'Descartada',         label:'❌ Sem retorno',         color:'#6b7280'},
+  {key:'Negada',             label:'🚫 Negada / Cancelada',  color:'#ef4444'},
 ];
-const BADGE_BY_STAGE = {'Fase avançada':'badge-green','Em triagem':'badge-purple','Candidatura enviada':'badge-blue','Aguardando':'badge-gray','Abordagem':'badge-yellow','Pendente':'badge-red','Oferta':'badge-green','Descartada':'badge-gray'};
+const BADGE_BY_STAGE = {'Fase avançada':'badge-green','Em triagem':'badge-purple','Candidatura enviada':'badge-blue','Aguardando':'badge-gray','Abordagem':'badge-yellow','Pendente':'badge-red','Oferta':'badge-green','Descartada':'badge-gray','Negada':'badge-red'};
+// Ordem do funil para o swipe (direita = avança uma fase)
+const FUNNEL = ['Pendente','Abordagem','Candidatura enviada','Aguardando','Em triagem','Fase avançada','Oferta'];
+function nextStage(cur){ var i=FUNNEL.indexOf(cur); if(i===-1) return 'Pendente'; if(i>=FUNNEL.length-1) return FUNNEL[FUNNEL.length-1]; return FUNNEL[i+1]; }
+function advanceVaga(id){ var v=VAGAS.find(function(x){return x.id===id;}); if(!v)return; saveStageOverride(id, nextStage(stageOf(v))); renderVagas(); }
+function rejectVaga(id){ saveStageOverride(id,'Negada'); renderVagas(); }
 
 // status pode ser sobrescrito pelo usuário (drag-drop), persistido em localStorage
 function loadStageOverrides(){ try{ return JSON.parse(localStorage.getItem('vaga_stage_overrides')||'{}'); }catch(e){ return {}; } }
@@ -2323,7 +2333,7 @@ function renderVagas(){
 
 function cardHTML(v){
   const note = v.destaque ? `<div class="kan-note" title="${v.destaque}">★ ${v.destaque.length>42?v.destaque.slice(0,40)+'…':v.destaque}</div>` : `<div class="kan-date">${v.data}</div>`;
-  return `<div class="kan-card" draggable="true" data-id="${v.id}" onclick="openVaga('${v.id}')">
+  return `<div class="kan-card" data-swipe data-id="${v.id}" onclick="openVaga('${v.id}')">
       <div class="kan-top">
         <div><div class="kan-empresa">${v.empresa}</div><div class="kan-cargo">${v.cargo}</div></div>
         <div class="kan-fit ${fitClass(v.fit)}">${v.fit}%</div>
@@ -2344,7 +2354,7 @@ function renderKanban(match){
       <div class="kanban-body">${items.length?items.map(cardHTML).join(''):'<div class="kanban-empty">vazio</div>'}</div>
     </div>`;
   }).join('');
-  wireDnD();
+  wireSwipe();
 }
 
 function renderGrid(match){
@@ -2352,7 +2362,7 @@ function renderGrid(match){
   const items = VAGAS.filter(match).sort((a,b)=>b.fit-a.fit);
   grid.innerHTML = items.map(v => {
     const st = stageOf(v);
-    return `<div class="vaga-card" onclick="openVaga('${v.id}')">
+    return `<div class="vaga-card" data-swipe data-id="${v.id}" onclick="openVaga('${v.id}')">
       <div class="vaga-top"><div><div class="vaga-empresa">${v.empresa}</div><div class="vaga-cargo">${v.cargo}</div></div><div class="vaga-fit">${v.fit}%</div></div>
       <div class="fit-bar"><div class="fit-fill" style="width:${v.fit}%"></div></div>
       <div><span class="badge ${BADGE_BY_STAGE[st]||v.statusBadge}">${st}</span></div>
@@ -2360,27 +2370,43 @@ function renderGrid(match){
       <div class="vaga-footer"><span class="vaga-date">${v.data}</span><span style="font-size:.72rem;color:var(--gold)">Ver detalhes →</span></div>
     </div>`;
   }).join('');
+  wireSwipe();
 }
 
-// Drag & drop entre colunas
-let dragId = null;
-function wireDnD(){
-  document.querySelectorAll('.kan-card').forEach(card => {
-    card.addEventListener('dragstart', e => { dragId = card.dataset.id; card.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-    card.addEventListener('dragend', () => { dragId=null; card.classList.remove('dragging'); document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('drop-hover')); });
-  });
-  document.querySelectorAll('.kanban-col').forEach(col => {
-    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover'); });
-    col.addEventListener('dragleave', () => col.classList.remove('drop-hover'));
-    col.addEventListener('drop', e => {
-      e.preventDefault();
-      if(!dragId) return;
-      const stage = col.dataset.stage;
-      saveStageOverride(dragId, stage);
-      renderKanban(v => { const q=(document.getElementById('vaga-search').value||'').toLowerCase(); return !q||v.empresa.toLowerCase().includes(q)||v.cargo.toLowerCase().includes(q); });
-    });
+// Swipe horizontal nos cards: direita = avança de fase · esquerda = negada/cancelada
+var _sw = { card:null, startX:0, cur:0, moved:false };
+function wireSwipe(){
+  document.querySelectorAll('[data-swipe]').forEach(function(card){
+    card.style.touchAction = 'pan-y';
+    card.addEventListener('mousedown', function(e){ swStart(card, e.clientX); });
+    card.addEventListener('touchstart', function(e){ swStart(card, e.touches[0].clientX); }, {passive:true});
+    card.addEventListener('click', function(e){ if(card._moved){ e.preventDefault(); e.stopPropagation(); card._moved=false; } }, true);
   });
 }
+function swStart(card, x){ _sw.card=card; _sw.startX=x; _sw.cur=0; _sw.moved=false; card.style.transition='none'; }
+function swMove(x){
+  if(!_sw.card) return;
+  _sw.cur = x - _sw.startX;
+  if(Math.abs(_sw.cur) > 6) _sw.moved = true;
+  _sw.card.style.transform = 'translateX(' + _sw.cur + 'px)';
+  _sw.card.classList.toggle('sw-right', _sw.cur > 60);
+  _sw.card.classList.toggle('sw-left',  _sw.cur < -60);
+}
+function swEnd(){
+  var c = _sw.card; if(!c) return;
+  c.style.transition = 'transform .2s ease';
+  c.style.transform = 'translateX(0)';
+  c.classList.remove('sw-right','sw-left');
+  c._moved = _sw.moved;
+  var id = c.dataset.id, cur = _sw.cur;
+  _sw.card = null;
+  if(cur > 90) setTimeout(function(){ advanceVaga(id); }, 120);
+  else if(cur < -90) setTimeout(function(){ rejectVaga(id); }, 120);
+}
+document.addEventListener('mousemove', function(e){ swMove(e.clientX); });
+document.addEventListener('mouseup', swEnd);
+document.addEventListener('touchmove', function(e){ if(_sw.card){ swMove(e.touches[0].clientX); } }, {passive:true});
+document.addEventListener('touchend', swEnd);
 
 let currentVagaId = null;
 function openVaga(id) {
@@ -2510,6 +2536,8 @@ appInit();
     }catch(e){}}
     var lbl=document.getElementById('fs-label'),dot=document.getElementById('fs-dot');
     if(lbl)lbl.textContent='nuvem'; if(dot)dot.classList.add('on');
+    // Autosave periódico (a cada 5 min) — rede de segurança além do save por interação
+    if(!window._autosave){ window._autosave=setInterval(function(){ if(window.saveSync)window.saveSync(); }, 300000); }
     if(window.PJ)window.PJ.render(); if(window.mxRender)window.mxRender(); if(window.bjjRender)window.bjjRender();
     if(typeof initRoda==='function'){try{initRoda();initTreinos();initDiario();renderVagas();}catch(e){}}
     if(window.PJ&&!window.PJ._sync){var _s=window.PJ.setDone;window.PJ.setDone=function(k,val){_s(k,val);window.saveSync();};window.PJ._sync=true;}
